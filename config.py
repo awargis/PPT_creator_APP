@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 JEE_SUBJECTS = ["Physics", "Chemistry", "Mathematics"]
 NEET_SUBJECTS = ["Physics", "Chemistry", "Botany", "Zoology"]
-EXAMS = ["JEE Main", "JEE Advanced", "NEET UG"]
+EXAMS = ["Auto-detect", "JEE Main", "JEE Advanced", "NEET UG"]
 STYLES = ["Premium Light", "Premium Dark", "High Contrast"]
 
 
@@ -20,4 +20,6 @@ class AppConfig:
 def get_subjects(exam_type: str) -> list[str]:
     if exam_type == "NEET UG":
         return NEET_SUBJECTS.copy()
+    if exam_type == "Auto-detect":
+        return JEE_SUBJECTS.copy() + ["Botany", "Zoology"]
     return JEE_SUBJECTS.copy()

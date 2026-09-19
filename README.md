@@ -15,9 +15,11 @@ Tesseract OCR fallback (only when native text is insufficient)
     ↓
 Page layout / column analysis
     ↓
-Question-start detection
+Exam-profile detection + question-start detection
     ↓
-Question segmentation + image crop
+Exam-aware question segmentation + MCQ option grouping
+    ↓
+Transparent background crop + legibility enhancement
     ↓
 Deterministic subject classification
     ↓
@@ -94,11 +96,20 @@ The application replaces that shape with the detected question crop. If it is ab
 
 More detail: `docs/TEMPLATE_GUIDE.md`.
 
-## Subject classification
+## Exam and subject classification
 
-- **JEE Main:** Q1–25 Physics, Q26–50 Chemistry, Q51–75 Mathematics.
-- **NEET UG:** Q1–45 Physics, Q46–90 Chemistry, Q91–135 Botany, Q136–180 Zoology.
-- **JEE Advanced:** no artificial question-number mapping is used. The system relies on detected subject/section headers; unresolved questions are marked `Unclassified` and sent to review.
+The sidebar supports **Auto-detect** as well as manual override.
+
+- **JEE Main:** modern subject sections that restart numbering at 1 are handled as
+  25-question blocks: Physics → Chemistry → Mathematics. The detector does not
+  treat `(1) (2) (3) (4)` MCQ options as new questions.
+- **NEET UG:** repeated 1–45 subject blocks are handled as Physics → Chemistry →
+  Botany → Zoology.
+- **JEE Advanced:** no unsafe fixed subject-number mapping is assumed. The system
+  uses explicit subject/section headers and sequential question starts, with
+  unresolved items marked `Unclassified` for review.
+- The first pages are also used for local, explainable exam-type detection
+  (JEE Main / JEE Advanced / NEET UG).
 
 This keeps JEE Advanced classification explainable rather than guessing.
 
@@ -144,4 +155,12 @@ python -m pip install flake8 pytest
 
 ## Current engineering scope
 
-The project is deliberately deterministic and reviewable. It does not pretend that arbitrary JEE PDFs can always be segmented perfectly: unusual multi-page layouts, heavily graphical questions and malformed scans can still require human review. The UI therefore exposes confidence and manual correction before PPT export.
+The project is deliberately deterministic and reviewable. Question boundaries are
+based on detected question starts, not option labels, so a complete MCQ (question
++ all options) becomes one crop. Questions that continue onto another PDF page
+are stitched into one crop. Near-white paper is converted to transparency so
+the source question sits cleanly on a premium PPT background.
+
+Unusual multi-page layouts, heavily graphical scans, OCR errors, or non-standard
+JEE Advanced section numbering can still require human review. The UI therefore
+exposes confidence and manual correction before PPT export.

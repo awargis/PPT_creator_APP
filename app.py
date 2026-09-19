@@ -7,6 +7,8 @@ from answer_key.parser import parse
 from answer_key.validator import validate
 from image.enhancement import enhance
 from pipeline.orchestrator import run_pipeline
+from pipeline.exam_detector import detect_exam_type
+from config import get_subjects
 from services.output_service import create_subject_outputs
 from ui.report import render_report
 from ui.review import render_review
@@ -51,13 +53,30 @@ if analyze:
 
     answers = parse(answer_text)
     st.session_state["answers"] = answers
+
+    detection = detect_exam_type(pdf.getvalue())
+    if settings["exam_type"] == "Auto-detect":
+        effective_exam = detection.exam_type
+    else:
+        effective_exam = settings["exam_type"]
+    effective_subjects = get_subjects(effective_exam)
+    st.session_state["detected_exam"] = detection
+    st.session_state["effective_exam"] = effective_exam
+    st.session_state["effective_subjects"] = effective_subjects
+
     with st.status("Processing document…", expanded=True) as status:
+        st.write(
+            f"Exam: **{effective_exam}** "
+            f"(auto-detection confidence {detection.confidence:.0%})"
+            if settings["exam_type"] == "Auto-detect"
+            else f"Exam: **{effective_exam}** (manual selection)"
+        )
         st.write("Rendering PDF pages…")
         try:
             regions, report = run_pipeline(
                 pdf.getvalue(),
-                settings["exam_type"],
-                settings["subjects"],
+                effective_exam,
+                effective_subjects,
                 settings["render_dpi"],
                 settings["pad_x"],
                 settings["pad_y"],
@@ -71,7 +90,7 @@ if analyze:
             st.session_state["regions"] = regions
             st.session_state["report"] = report
             st.session_state["template_bytes"] = template.getvalue()
-            st.session_state["exam_type"] = settings["exam_type"]
+            st.session_state["effective_exam"] = effective_exam
             status.update(label=f"Detected {len(regions)} question(s)", state="complete")
         except Exception as exc:
             status.update(label="Processing failed", state="error")
@@ -82,9 +101,16 @@ if "regions" in st.session_state:
     regions = st.session_state["regions"]
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
+    effective_subjects = st.session_state.get("effective_subjects", settings["subjects"])
+    effective_exam = st.session_state.get("effective_exam", settings["exam_type"])
+
+    if "detected_exam" in st.session_state and settings["exam_type"] == "Auto-detect":
+        detection = st.session_state["detected_exam"]
+        evidence = ", ".join(detection.evidence) if detection.evidence else "No strong marker"
+        st.info(f"Auto-detected **{effective_exam}** · confidence {detection.confidence:.0%} · evidence: {evidence}")
 
     render_report(report)
-    render_review(regions, settings["subjects"], answers)
+    render_review(regions, effective_subjects, answers)
 
     if st.button("📦 Generate production ZIP", type="primary", use_container_width=True):
         # Recompute answer validation after manual review edits.
@@ -94,7 +120,7 @@ if "regions" in st.session_state:
                 archive, manifest = create_subject_outputs(
                     st.session_state["template_bytes"], regions, answers, settings["style"]
                 )
-                filename = f"{re.sub(r'[^A-Za-z0-9_-]+', '_', st.session_state['exam_type'])}_Discussion_Studio.zip"
+                filename = f"{re.sub(r'[^A-Za-z0-9_-]+', '_', st.session_state['effective_exam'])}_Discussion_Studio.zip"
                 st.success(
                     f"Ready: {len(manifest['presentations'])} presentation(s), "
                     f"{len(manifest['questions'])} crop(s)."
