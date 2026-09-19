@@ -14,3 +14,17 @@ def test_unclassified_is_flagged_for_review():
     classify_subjects(regions, [], ["Physics", "Chemistry", "Mathematics"], "JEE Advanced")
     assert regions[0].subject == "Unclassified"
     assert regions[0].needs_review is True
+
+
+def test_jee_main_restarts_question_numbers_for_each_subject():
+    regions = [
+        QuestionRegion(1, 0, 0, BoundingBox(0, 0, 100, 100)),
+        QuestionRegion(25, 1, 0, BoundingBox(0, 0, 100, 100)),
+        QuestionRegion(1, 2, 0, BoundingBox(0, 0, 100, 100)),
+        QuestionRegion(25, 3, 0, BoundingBox(0, 0, 100, 100)),
+        QuestionRegion(1, 4, 0, BoundingBox(0, 0, 100, 100)),
+    ]
+    classify_subjects(regions, [], ["Physics", "Chemistry", "Mathematics"], "JEE Main")
+    assert [r.subject for r in regions] == [
+        "Physics", "Physics", "Chemistry", "Chemistry", "Mathematics"
+    ]

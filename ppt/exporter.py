@@ -9,7 +9,10 @@ def export_subject_ppts(template_bytes, regions, answers, style="Premium Light")
     active = [region for region in regions if getattr(region, "included", True) and region.image is not None]
     subjects = sorted({region.subject for region in active})
     for subject in subjects:
-        selected = [region for region in active if region.subject == subject]
+        selected = sorted(
+            [region for region in active if region.subject == subject],
+            key=lambda region: (region.number, region.page_index, region.box.y0),
+        )
         if not selected:
             continue
         prs = build_slides(template_bytes, selected, answers, style=style)
