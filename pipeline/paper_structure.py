@@ -1,8 +1,10 @@
 """Automatic exam and paper-structure detection.
 
-The structure detector intentionally uses evidence from the uploaded paper itself:
-exam labels, section headers, question-range instructions, and question-type
-headers.  Fixed JEE Main/NEET ranges are used only after the paper is identified.
+The detector is deliberately paper-driven.  Fixed ranges are used only for
+standard JEE Main/NEET papers after the exam has been identified.  For JEE
+Advanced and other variants, subject headers and the actual question markers
+are used to infer the subject windows instead of assuming one rigid numbering
+scheme.
 """
 
 from dataclasses import dataclass, field
@@ -63,14 +65,15 @@ def normalize_subject(text: str) -> str | None:
 
 def detect_exam_type(page_text: str) -> tuple[str, float]:
     text = page_text.lower()
-    if re.search(r"\bjee\s*advanced\b", text):
+    # Look for the strongest explicit identifiers first.  NEET papers often
+    # mention JEE nowhere, while JEE Advanced may contain the word JEE Main in
+    # boilerplate/reference text, so Advanced wins when explicitly present.
+    if re.search(r"\bjee\s*advanced\b|advanced\s+entrance", text):
         return "JEE Advanced", 0.99
-    if re.search(r"\bjee\s*main\b", text):
+    if re.search(r"\bneet(?:\s*ug)?\b|national\s+eligibility\s+cum\s+entrance", text):
+        return "NEET UG", 0.99
+    if re.search(r"\bjee\s*main\b|joint\s+entrance\s+examination", text):
         return "JEE Main", 0.99
-    if re.search(r"\bneet(?:\s*ug)?\b", text):
-        return "NEET UG", 0.98
-    if "joint entrance examination" in text:
-        return "JEE Main", 0.70
     return "Unknown", 0.0
 
 
@@ -81,6 +84,7 @@ _TYPE_RANGE_RE = re.compile(
     r"matrix|match\s+the\s+following).*?\((\d+)\s*[-–]\s*(\d+)\)",
     re.I,
 )
+_NUMBER_MARKER_RE = re.compile(r"^\s*(\d{1,3})\s*[.)]?\s*$")
 
 
 def _fixed_structure(exam_type: str) -> list[SectionSpec]:
@@ -100,62 +104,164 @@ def _fixed_structure(exam_type: str) -> list[SectionSpec]:
     return []
 
 
+def _is_subject_header(text: str, subject: str) -> bool:
+    """Recognize a real subject heading, not an instruction paragraph.
+
+    NEET papers commonly use headings such as ``Physics:``, ``Chemistry`` or
+    ``Botany:`` without the JEE-style ``SECTION-I`` prefix.  The old detector
+    required the word SECTION and therefore started NEET cropping on the
+    instruction page.  Keep this rule conservative: a subject heading must be
+    a short standalone line and must not look like an instruction sentence.
+    """
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if not text or len(text) > 90:
+        return False
+    lowered = text.lower()
+    if subject.lower() not in lowered:
+        return False
+    if any(word in lowered for word in ("instruction", "question paper", "duration", "marks", "correct answer", "contains")):
+        return False
+    # Accept common title forms: "Physics", "Physics:", "SECTION-I (PHYSICS)",
+    # and "Physics (45 Questions)".
+    return bool(re.fullmatch(
+        rf"(?:section\s*[-–]?\s*[ivx]+\s*\(?\s*)?{re.escape(subject)}(?:\s*\(?\s*\d+\s*(?:questions?|q)\s*\)?)?\s*[:.)]?\s*",
+        lowered,
+        re.I,
+    ))
+
+
+def _find_subject_headers(blocks_by_page, subject: str):
+    hits = []
+    for page_index, blocks in enumerate(blocks_by_page):
+        for block in blocks:
+            if _is_subject_header(block.text, subject):
+                hits.append((page_index, block.box.y0, block))
+    return sorted(hits, key=lambda item: (item[0], item[1]))
+
+
+def _header_is_question_section(blocks_by_page, page_index: int, header_y: int, expected_start: int) -> bool:
+    """Check whether a subject heading is attached to a real question page.
+
+    Cover/topic pages often list ``Physics:``, ``Chemistry:`` and ``Mathematics:``
+    together.  Those are not section anchors.  A real section heading is
+    normally followed by the section's first numbered question and option
+    markers on the same page (or very shortly afterwards).
+    """
+    marker = re.compile(rf"^\s*{expected_start}\s*[.)]?\s*$")
+    # A cover/instruction page may itself list Physics/Chemistry/etc. and then
+    # contain numbered instructions.  Those numbers are not question starts.
+    if page_index < len(blocks_by_page):
+        for block in blocks_by_page[page_index]:
+            if re.search(r"general\s+instructions?", block.text or "", re.I):
+                return False
+    for pidx in range(page_index, min(len(blocks_by_page), page_index + 2)):
+        for block in blocks_by_page[pidx]:
+            if pidx == page_index and block.box.y0 < header_y:
+                continue
+            if marker.match((block.text or "").strip()):
+                return True
+    return False
+
+
+def _find_first_question_after(blocks_by_page, start_page: int, start_y: int, lo: int, hi: int):
+    """Fallback anchor when a paper has no standalone subject title."""
+    for page_index in range(start_page, len(blocks_by_page)):
+        blocks = blocks_by_page[page_index]
+        for block in sorted(blocks, key=lambda b: (b.box.y0, b.box.x0)):
+            if page_index == start_page and block.box.y0 < start_y:
+                continue
+            m = _NUMBER_MARKER_RE.match((block.text or "").strip())
+            if m and lo <= int(m.group(1)) <= hi:
+                return page_index, block.box.y0
+    return None, None
+
+
 def build_structure(blocks_by_page: list[list], exam_type: str) -> PaperStructure:
-    """Build an evidence-based structure from extracted page text."""
+    """Build a structure from the uploaded paper's own headings and ranges."""
     fixed = _fixed_structure(exam_type)
     if fixed:
-        # Attach actual section header locations where available.
-        for page_index, blocks in enumerate(blocks_by_page):
-            for block in blocks:
-                subject = normalize_subject(block.text)
-                if subject:
-                    for section in fixed:
-                        if section.subject == subject and re.search(
-                            r"^\s*section\s*[-–]?\s*[ivx]+\s*\(",
-                            block.text,
-                            re.I,
-                        ):
-                            if section.page_index is None:
-                                section.page_index = page_index
-                                section.header_y = block.box.y0
-        first_question_page = min(
-            (s.page_index for s in fixed if s.page_index is not None),
-            default=1,
-        )
+        for section in fixed:
+            hits = _find_subject_headers(blocks_by_page, section.subject)
+            # Prefer explicit SECTION-I/II/III headings.  Otherwise accept a
+            # subject title only when its page is actually followed by the
+            # first question for that subject.  This rejects NEET/JEE cover
+            # pages that merely list the syllabus/topics.
+            explicit = [h for h in hits if re.search(r"^\s*section\s*[-–]?\s*[ivx]+", h[2].text, re.I)]
+            candidates = explicit or hits
+            selected = next(
+                (h for h in candidates if _header_is_question_section(blocks_by_page, h[0], h[1], section.start_number)),
+                None,
+            )
+            if selected is None and explicit:
+                selected = explicit[0]
+            if selected:
+                section.page_index, section.header_y, _ = selected
+
+        # If a subject heading was not extracted (scanned/oddly formatted PDF),
+        # anchor that section at its first plausible question, but only after
+        # the previous section anchor. This avoids instruction-page numbers.
+        search_page = 0
+        search_y = -1
+        for section in fixed:
+            if section.page_index is not None:
+                search_page = section.page_index
+                search_y = section.header_y if section.header_y is not None else -1
+            else:
+                page, y = _find_first_question_after(
+                    blocks_by_page, search_page, search_y, section.start_number, section.end_number
+                )
+                if page is not None:
+                    section.page_index, section.header_y = page, max(0, y - 2)
+            if section.page_index is not None:
+                search_page = section.page_index
+                search_y = section.header_y or -1
+
+        known_starts = [s.page_index for s in fixed if s.page_index is not None]
+        first_question_page = min(known_starts) if known_starts else 1
         return PaperStructure(
             exam_type=exam_type,
             sections=fixed,
             instruction_pages=set(range(first_question_page)),
         )
 
-    # Generic JEE Advanced mode: derive sections and ranges from headers.
-    sections: list[SectionSpec] = []
-    pending: SectionSpec | None = None
-    for page_index, blocks in enumerate(blocks_by_page):
-        for block in blocks:
-            text = block.text.strip()
-            subject = normalize_subject(text)
-            if "section" in text.lower() and subject:
-                # If a section header itself doesn't provide a range, keep the
-                # next question range as the section's bounds.
-                pending = SectionSpec(subject, 1, 999, page_index, block.box.y0)
-                sections.append(pending)
-            m = _TYPE_RANGE_RE.search(text)
-            if m and pending:
-                lo, hi = int(m.group(2)), int(m.group(3))
-                kind = "Integer" if "integer" in m.group(1).lower() or "numerical" in m.group(1).lower() else "MCQ"
-                pending.question_types[(lo, hi)] = kind
-                if pending.start_number == 1 and pending.end_number == 999:
-                    pending.start_number, pending.end_number = lo, hi
+    # Generic JEE Advanced / unusual mode. Subject headings define windows;
+    # question numbers inside each window define its numeric range. We do not
+    # assume JEE Advanced has the JEE Main 1..75 numbering scheme.
+    subject_order = ["Physics", "Chemistry", "Mathematics", "Botany", "Zoology", "Biology"]
+    anchors = []
+    for subject in subject_order:
+        for page, y, block in _find_subject_headers(blocks_by_page, subject):
+            anchors.append((page, y, subject))
+            break
+    anchors.sort(key=lambda item: (item[0], item[1]))
 
-    # If no section headers exist, retain a single review section. The actual
-    # question detector will still expose detected questions.
+    sections: list[SectionSpec] = []
+    for idx, (page, y, subject) in enumerate(anchors):
+        next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else None
+        numbers = []
+        for pidx in range(page, len(blocks_by_page)):
+            if next_anchor and pidx > next_anchor[0]:
+                break
+            for block in blocks_by_page[pidx]:
+                if pidx == page and block.box.y0 < y:
+                    continue
+                if next_anchor and pidx == next_anchor[0] and block.box.y0 >= next_anchor[1]:
+                    continue
+                m = _NUMBER_MARKER_RE.match((block.text or "").strip())
+                if m:
+                    numbers.append(int(m.group(1)))
+        numbers = sorted(set(n for n in numbers if 1 <= n <= 999))
+        if numbers:
+            sections.append(SectionSpec(subject, min(numbers), max(numbers), page, y))
+        else:
+            sections.append(SectionSpec(subject, 1, 999, page, y))
+
     if not sections:
         sections = [SectionSpec("Unclassified", 1, 999)]
 
-    # Remove overlapping placeholder ranges while preserving document order.
+    first_page = min((s.page_index for s in sections if s.page_index is not None), default=2)
     return PaperStructure(
         exam_type=exam_type,
         sections=sections,
-        instruction_pages={i for i, blocks in enumerate(blocks_by_page[:2]) if blocks},
+        instruction_pages=set(range(first_page)),
     )

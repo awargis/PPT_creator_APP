@@ -24,6 +24,7 @@ class QuestionRegion:
     end_page_index: Optional[int] = None
     included: bool = True
     question_type: str = "MCQ"
+    source_section: object | None = None
 
     @property
     def sort_key(self) -> tuple[int, int, int]:

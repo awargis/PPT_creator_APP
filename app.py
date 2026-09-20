@@ -38,7 +38,7 @@ pdf = st.file_uploader("### 1 · Question paper PDF", type=["pdf"], key="pdf")
 template = st.file_uploader("### 2 · Discussion PPT template", type=["pptx"], key="template")
 answer_text = st.text_area(
     "### 3 · Answer key (optional)",
-    placeholder="Any order/format accepted — e.g. 1:(4), 3:(2), 2:(4) or 1:A\n2:B\n3:C",
+    placeholder="Any order/format accepted, e.g. 1: (4), 23: (246), 75: (1.00)\nor\n1:A, 2:B, 3:C, 4:D",
     height=120,
 )
 
@@ -57,13 +57,14 @@ if analyze:
 
     answers = parse(answer_text)
     st.session_state["answers"] = answers
-    st.session_state["answer_text_last"] = answer_text or ""
     with st.status("Processing document…", expanded=True) as status:
         st.write("Rendering PDF pages…")
         try:
+            selected_exam = settings.get("exam_mode", "Auto-detect")
+            exam_arg = "Auto" if selected_exam == "Auto-detect" else selected_exam
             regions, report, structure = run_pipeline(
                 pdf.getvalue(),
-                "Auto",
+                exam_arg,
                 settings["subjects"],
                 settings["render_dpi"],
                 settings["pad_x"],
@@ -98,24 +99,6 @@ if "regions" in st.session_state:
     regions = st.session_state["regions"]
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
-
-    # Keep the answer key live after analysis. Parse the CURRENT answer-key
-    # textarea on every Streamlit rerun, and synchronize every region from it.
-    # This matters when the user corrects/replaces the key after analysis.
-    # Clearing an answer must also clear the old value from the region.
-    current_answer_text = answer_text or ""
-    last_answer_text = st.session_state.get("answer_text_last", "")
-    if current_answer_text != last_answer_text:
-        answers = parse(current_answer_text) if current_answer_text.strip() else {}
-        st.session_state["answers"] = answers
-        st.session_state["answer_text_last"] = current_answer_text
-    else:
-        # Keep the widget text authoritative even after another UI interaction.
-        answers = parse(current_answer_text) if current_answer_text.strip() else st.session_state.get("answers", {})
-        st.session_state["answers"] = answers
-
-    for region in regions:
-        region.answer = answers.get(region.number)
 
     render_report(report)
     render_review(regions, [s.subject for s in st.session_state["structure"].sections if s.subject != "Unclassified"], answers)

@@ -7,7 +7,9 @@ def classify_subjects(regions, headers, known_subjects, exam_type, structure=Non
     for region in regions:
         subject = None
         if structure is not None:
-            section = structure.section_for(region.number)
+            # Prefer the section identity carried from the detector.  Fall back
+            # to numeric ranges for standard JEE Main/NEET papers.
+            section = getattr(region, "source_section", None) or structure.section_for(region.number)
             if section and section.subject in known_subjects:
                 subject = section.subject
                 region.question_type = section.type_for(region.number)

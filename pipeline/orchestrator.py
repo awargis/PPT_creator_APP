@@ -14,27 +14,26 @@ def _blocks_to_text(blocks):
     return "\n".join(block.text for block in blocks if block.text)
 
 
-def _section_window(blocks_by_page, section):
-    """Return blocks belonging to one section, excluding instruction pages and
-    the next subject section."""
+def _section_window(blocks_by_page, section, next_section=None):
+    """Return only blocks inside a subject's physical document window.
+
+    This is critical for NEET: instruction pages may contain numbered rules,
+    while the four subject blocks can start on different pages.  It is also
+    useful for JEE Advanced where section/subject layouts vary from paper to
+    paper.
+    """
     selected = []
     for page_index, blocks in enumerate(blocks_by_page):
         if section.page_index is not None and page_index < section.page_index:
             continue
+        if next_section and next_section.page_index is not None and page_index > next_section.page_index:
+            break
         for block in blocks:
-            if (
-                section.page_index == page_index
-                and section.header_y is not None
-                and block.box.y1 < section.header_y
-            ):
+            if section.page_index == page_index and section.header_y is not None and block.box.y0 < section.header_y:
                 continue
-            # Stop at a later section header on the same page.
-            if (
-                page_index == section.page_index
-                and section.header_y is not None
-                and block.box.y0 < section.header_y
-            ):
-                continue
+            if next_section and next_section.page_index == page_index and next_section.header_y is not None:
+                if block.box.y0 >= next_section.header_y:
+                    continue
             selected.append(block)
     return selected
 
@@ -84,40 +83,44 @@ def run_pipeline(
         }
 
         all_questions = []
-        if structure.sections and exam_type in {"JEE Main", "NEET UG"}:
-            # Detect each section independently. This is what prevents page-1
-            # instruction numbering from ever entering the question stream.
-            for section in structure.sections:
-                window = _section_window(blocks_by_page, section)
+        if structure.sections:
+            # Run detection section-by-section for every exam type.  This is
+            # safer than a global 1..N scan because NEET has four fixed
+            # subject ranges and JEE Advanced can reuse question numbers in
+            # different subject/section blocks.
+            for section_index, section in enumerate(structure.sections):
+                next_section = structure.sections[section_index + 1] if section_index + 1 < len(structure.sections) else None
+                window = _section_window(blocks_by_page, section, next_section)
+                expected_numbers = None
+                if section.end_number < 1000:
+                    expected_numbers = set(range(section.start_number, section.end_number + 1))
                 found = find_questions(
                     window,
-                    expected_numbers=set(range(section.start_number, section.end_number + 1)),
-                    min_number=section.start_number,
-                    max_number=section.end_number,
+                    expected_numbers=expected_numbers,
+                    min_number=section.start_number if section.end_number < 1000 else 1,
+                    max_number=section.end_number if section.end_number < 1000 else 999,
                 )
+                for block in found:
+                    # Carry the physical section identity forward.  Number
+                    # alone is not sufficient for some JEE Advanced papers.
+                    block._section_spec = section
                 all_questions.extend(found)
-        else:
-            # JEE Advanced / unusual papers: use standalone/in-line question
-            # markers after the detected section headers. Uncertain detections
-            # remain reviewable rather than being silently discarded.
-            start_page = min(structure.instruction_pages or {0})
-            window = [
-                block
-                for page_index, blocks in enumerate(blocks_by_page)
-                if page_index >= start_page
-                for block in blocks
-            ]
-            all_questions = find_questions(window, expected_numbers=None)
 
-        # De-duplicate by question number and choose the earliest structurally
-        # valid marker. This also prevents OCR duplicates.
+        # De-duplicate OCR duplicates.  Standard papers use a global question
+        # number; JEE Advanced may reuse numbers in separate subject sections,
+        # so the physical section is part of the key there.
+        from .question_detector import question_number
         unique = {}
         for q in all_questions:
-            number = None
-            from .question_detector import question_number
             number = question_number(q.text)
-            if number is not None and number not in unique:
-                unique[number] = q
+            if number is None:
+                continue
+            section = getattr(q, "_section_spec", None)
+            if exam_type == "JEE Advanced" and section is not None:
+                key = (section.subject, number, q.page_index, q.column_index, q.box.y0)
+            else:
+                key = (number,)
+            unique.setdefault(key, q)
         all_questions = sorted(
             unique.values(), key=lambda b: (b.page_index, b.column_index, b.box.y0)
         )

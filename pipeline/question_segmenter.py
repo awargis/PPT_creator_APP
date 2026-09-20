@@ -85,7 +85,10 @@ def segment_questions(
         number = question_number(start.text)
         if number is None:
             continue
-        section = section_for(number)
+        # The orchestrator attaches the physical section when available.
+        # This matters for JEE Advanced papers where question numbers can
+        # restart inside another subject/section.
+        section = getattr(start, "_section_spec", None) or section_for(number)
 
         page = page_images[start.page_index]
         two_columns = any(
@@ -176,6 +179,7 @@ def segment_questions(
                 extraction_method=start.source,
                 end_page_index=end_page_index,
                 question_type=qtype,
+                source_section=section,
             )
         )
     return output

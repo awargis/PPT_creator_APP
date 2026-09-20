@@ -72,6 +72,19 @@ Then upload:
 2. Discussion PPT template
 3. Optional answer key
 
+The answer-key parser is order-independent and format-flexible. It accepts
+option letters, option numbers, and numerical/numerical-value answers, for
+example:
+
+```text
+1: (4), 2: (4), 23: (246), 24: (100), 75: (1.00)
+```
+
+These are also accepted: `1:A`, `Q2-B`, `3) C`, `4 -> D`, `18 B`, and mixed
+entries in any order. Parentheses around answers are ignored. Values such as
+`0`, `246`, `332`, `-2.5`, and `1.00` are preserved as answer values rather
+than being restricted to options 1–4.
+
 The included demo assets are:
 
 - `examples/demo_question_paper.pdf`
@@ -109,8 +122,8 @@ More detail: `docs/TEMPLATE_GUIDE.md`.
 ## Subject classification
 
 - **JEE Main:** Q1–25 Physics, Q26–50 Chemistry, Q51–75 Mathematics. The paper itself is first checked for section headers/instructions, then these ranges are used as a structural validation guard.
-- **NEET UG:** Q1–45 Physics, Q46–90 Chemistry, Q91–135 Botany, Q136–180 Zoology.
-- **JEE Advanced:** no artificial question-number mapping is used. The system relies on detected subject/section headers; unresolved questions are marked `Unclassified` and sent to review.
+- **NEET UG:** Q1–45 Physics, Q46–90 Chemistry, Q91–135 Botany, Q136–180 Zoology. Subject headings are anchored to real question pages so cover-page topics and numbered instructions are excluded.
+- **JEE Advanced:** no JEE Main-style 1–75 mapping is imposed. Subject/section windows are inferred from the uploaded paper, and question numbering may restart inside another subject/section without global number de-duplication.
 
 This keeps JEE Advanced classification explainable rather than guessing.
 
@@ -157,9 +170,3 @@ python -m pip install flake8 pytest
 ## Current engineering scope
 
 The project is deliberately deterministic and reviewable. It does not pretend that arbitrary JEE PDFs can always be segmented perfectly: unusual multi-page layouts, heavily graphical questions and malformed scans can still require human review. The UI therefore exposes confidence and manual correction before PPT export.
-
-### Premium dark-slide text and answer mapping
-- Transparent question crops automatically recolor dark neutral source text/lines to a bright white foreground so the original PDF text remains readable on the graphite discussion template.
-- Colored diagrams are preserved.
-- Answer keys support MCQ letters/options and numerical/integer answers.
-- Answers are mapped strictly by question number and injected onto the same question slide. If a custom template has no `#ANSWER` token, the exporter adds a premium answer badge automatically.
