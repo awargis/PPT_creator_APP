@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 JEE_SUBJECTS = ["Physics", "Chemistry", "Mathematics"]
 NEET_SUBJECTS = ["Physics", "Chemistry", "Botany", "Zoology"]
-EXAMS = ["JEE Main", "JEE Advanced", "NEET UG"]
+EXAMS = ["JEE Main", "JEE Advanced", "NEET UG", "BITSAT", "CUET", "Custom / Other"]
 STYLES = ["Premium Light", "Premium Dark", "High Contrast"]
 
 

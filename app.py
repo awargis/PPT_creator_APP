@@ -101,7 +101,14 @@ if "regions" in st.session_state:
     report = st.session_state["report"]
 
     render_report(report)
-    render_review(regions, [s.subject for s in st.session_state["structure"].sections if s.subject != "Unclassified"], answers)
+    review_subjects = [
+        section.subject for section in st.session_state["structure"].sections
+        if section.subject != "Unclassified"
+    ]
+    # Never let an unusual/custom paper crash the review screen just because
+    # its subject taxonomy is not recognized. The user can assign a subject
+    # manually and generation will preserve that label.
+    render_review(regions, review_subjects or ["Unclassified"], answers)
 
     if st.button("📦 Generate production ZIP", type="primary", use_container_width=True):
         # Recompute answer validation after manual review edits.

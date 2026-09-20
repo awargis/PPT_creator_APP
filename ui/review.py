@@ -14,8 +14,14 @@ def render_review(regions, subjects, answers):
             with cols[1]:
                 region.number = int(st.number_input("Question", min_value=1, max_value=999, value=int(region.number), key=f"num_{idx}"))
             with cols[2]:
-                current = region.subject if region.subject in subjects else subjects[0]
-                options = subjects + ["Unclassified"] if "Unclassified" not in subjects else subjects
+                # A fully generic paper can legitimately have no recognized
+                # subject labels. Never crash the review UI in that case.
+                inferred = [r.subject for r in regions if getattr(r, "subject", None)]
+                base_subjects = list(dict.fromkeys([s for s in subjects if s] + inferred))
+                if not base_subjects:
+                    base_subjects = ["Unclassified"]
+                options = base_subjects if "Unclassified" in base_subjects else base_subjects + ["Unclassified"]
+                current = region.subject if region.subject in options else options[0]
                 region.subject = st.selectbox("Subject", options, index=options.index(current), key=f"sub_{idx}")
             with cols[3]:
                 answer_default = answers.get(region.number, region.answer or "")

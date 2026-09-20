@@ -132,10 +132,15 @@ def run_pipeline(
             pad_x=pad_x,
             pad_y=pad_y,
         )
-        effective_subjects = subjects or [
+        structure_subjects = [
             section.subject for section in structure.sections
-            if section.subject != "Unclassified"
+            if section.subject and section.subject != "Unclassified"
         ]
+        effective_subjects = list(dict.fromkeys((subjects or []) + structure_subjects))
+        if not effective_subjects:
+            # Last-resort generic mode: preserve the document rather than
+            # failing because a subject taxonomy could not be inferred.
+            effective_subjects = ["Unclassified"]
         regions = classify_subjects(
             regions,
             all_headers,

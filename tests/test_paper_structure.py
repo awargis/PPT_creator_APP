@@ -53,3 +53,32 @@ def test_jee_advanced_subject_ranges_can_restart_question_numbers():
         ("Mathematics", 1, 3),
     ]
     assert structure.instruction_pages == {0}
+
+
+def test_generic_part_subject_headings_are_detected_without_fixed_ranges():
+    pages = [
+        [block("COVER", 0, 20), block("GENERAL INSTRUCTIONS", 0, 50)],
+        [block("PART-I (PHYSICS)", 1, 30), block("1.", 1, 70), block("2.", 1, 120)],
+        [block("PART-II (CHEMISTRY)", 2, 30), block("18.", 2, 70), block("19.", 2, 120)],
+        [block("PART-III (MATHEMATICS)", 3, 30), block("35.", 3, 70), block("36.", 3, 120)],
+    ]
+    structure = build_structure(pages, "JEE Advanced")
+    assert [(s.subject, s.start_number, s.end_number) for s in structure.sections] == [
+        ("Physics", 1, 2),
+        ("Chemistry", 18, 19),
+        ("Mathematics", 35, 36),
+    ]
+
+
+def test_generic_unknown_exam_can_build_custom_subjects():
+    pages = [
+        [block("GENERAL INSTRUCTIONS", 0, 20)],
+        [block("PART-A (Logical Reasoning)", 1, 30), block("1.", 1, 70), block("2.", 1, 120)],
+        [block("PART-B (English Proficiency)", 2, 30), block("3.", 2, 70), block("4.", 2, 120)],
+    ]
+    structure = build_structure(pages, "Unknown")
+    assert [(s.subject, s.start_number, s.end_number) for s in structure.sections] == [
+        ("Logical Reasoning", 1, 2),
+        ("English Proficiency", 3, 4),
+    ]
+    assert structure.instruction_pages == {0}

@@ -1,6 +1,6 @@
 # Vidyapeeth Test Presentation Studio
 
-A production-oriented, local-first Streamlit application for turning JEE Main, JEE Advanced and NEET UG question-paper PDFs into **reviewable, subject-wise discussion PPTX files**.
+A production-oriented, local-first Streamlit application for turning JEE Main, JEE Advanced, NEET UG, BITSAT and other structured question-paper PDFs into **reviewable, subject-wise discussion PPTX files**.
 
 > No Gemini/OpenAI API is required by the active pipeline.
 
@@ -9,7 +9,7 @@ A production-oriented, local-first Streamlit application for turning JEE Main, J
 ```text
 Question PDF + discussion PPT
     ↓
-Automatic exam detection (JEE Main / JEE Advanced / NEET)
+Automatic exam detection (JEE Main / JEE Advanced / NEET / BITSAT / generic custom mode)
     ↓
 Paper instructions + section structure extraction
     ↓
@@ -31,7 +31,7 @@ Human review
     ↓
 Uploaded PPT template cloning
     ↓
-Physics / Chemistry / Mathematics PPTX + crops + manifest ZIP
+Dynamic subject-wise PPTX + crops + manifest ZIP
 ```
 
 ## Quick start
@@ -123,9 +123,9 @@ More detail: `docs/TEMPLATE_GUIDE.md`.
 
 - **JEE Main:** Q1–25 Physics, Q26–50 Chemistry, Q51–75 Mathematics. The paper itself is first checked for section headers/instructions, then these ranges are used as a structural validation guard.
 - **NEET UG:** Q1–45 Physics, Q46–90 Chemistry, Q91–135 Botany, Q136–180 Zoology. Subject headings are anchored to real question pages so cover-page topics and numbered instructions are excluded.
-- **JEE Advanced:** no JEE Main-style 1–75 mapping is imposed. Subject/section windows are inferred from the uploaded paper, and question numbering may restart inside another subject/section without global number de-duplication.
-
-This keeps JEE Advanced classification explainable rather than guessing.
+- **JEE Advanced:** no JEE Main-style 1–75 mapping is imposed. PART/SECTION subject headings and actual question markers define each physical section, so the sample Paper-1 format `Physics 1–17`, `Chemistry 18–34`, `Mathematics 35–51` is detected from the document itself.
+- **BITSAT / other / custom papers:** the adaptive path looks for `PART/SECTION (Subject)`, `PART-A - Subject`, or validated standalone subject headings, then derives the question-number window from the actual question markers. No fixed question count is required.
+- If a subject cannot be inferred safely, the paper is preserved as **Unclassified** instead of crashing; the Review screen lets the user assign a subject manually.
 
 ## Native extraction vs OCR
 
