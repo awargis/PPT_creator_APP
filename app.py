@@ -99,18 +99,23 @@ if "regions" in st.session_state:
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
 
-    # Keep the answer key live after analysis. Previously the pasted key was
-    # parsed only when the Analyze button was clicked, so editing the answer
-    # key afterwards could leave the PPT exporter using stale answers.
+    # Keep the answer key live after analysis. Parse the CURRENT answer-key
+    # textarea on every Streamlit rerun, and synchronize every region from it.
+    # This matters when the user corrects/replaces the key after analysis.
+    # Clearing an answer must also clear the old value from the region.
     current_answer_text = answer_text or ""
     last_answer_text = st.session_state.get("answer_text_last", "")
     if current_answer_text != last_answer_text:
         answers = parse(current_answer_text) if current_answer_text.strip() else {}
         st.session_state["answers"] = answers
         st.session_state["answer_text_last"] = current_answer_text
-        for region in regions:
-            if region.number in answers:
-                region.answer = answers[region.number]
+    else:
+        # Keep the widget text authoritative even after another UI interaction.
+        answers = parse(current_answer_text) if current_answer_text.strip() else st.session_state.get("answers", {})
+        st.session_state["answers"] = answers
+
+    for region in regions:
+        region.answer = answers.get(region.number)
 
     render_report(report)
     render_review(regions, [s.subject for s in st.session_state["structure"].sections if s.subject != "Unclassified"], answers)

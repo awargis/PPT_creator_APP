@@ -19,28 +19,40 @@ import re
 
 # A single answer token can be an option letter, option number, integer,
 # decimal, negative value, fraction, or a slash-separated multi-answer.
-_TOKEN = r"(?:[A-Da-d]|[1-4]|-?\d+(?:\.\d+)?|-?\d+(?:\.\d+)?/-?\d+(?:\.\d+)?)"
+_TOKEN = r"(?:-?\d+(?:\.\d+)?(?:/-?\d+(?:\.\d+)?)?|[A-Da-d])"
 _MULTI_TOKEN = rf"{_TOKEN}(?:\s*[/&|]\s*{_TOKEN})*"
 
+# Real-world answer keys frequently wrap every answer in parentheses, e.g.
+# `1: (4), 2: (4), 21: (5), 75: (1.00)`.  The previous parser expected
+# the token immediately after `:` and therefore returned an empty dictionary
+# for this very common format. Keep the wrapper as part of the match and
+# normalize it away later.
+_VALUE = rf"(?:\(\s*{_MULTI_TOKEN}\s*\)|{_MULTI_TOKEN})"
+
 _LINE_PATTERN = re.compile(
-    rf"^\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s*(?::|\.|\)|=|->|-)\s*({_MULTI_TOKEN})\b",
+    rf"^\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s*(?::|\.|\)|=|->|-)\s*({_VALUE})",
     re.I,
 )
 
 # Some answer keys use `1 A` without punctuation.
 _SPACE_PATTERN = re.compile(
-    rf"^\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s+({_MULTI_TOKEN})\b",
+    rf"^\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s+({_VALUE})",
     re.I,
 )
 
 _INLINE_PATTERN = re.compile(
-    rf"(?:^|[,;])\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s*(?::|\.|\)|=|->|-)\s*({_MULTI_TOKEN})\b",
+    rf"(?:^|[,;])\s*(?:Q\s*\.?\s*)?(\d{{1,3}})\s*(?::|\.|\)|=|->|-)\s*({_VALUE})",
     re.I,
 )
 
 
 def _normalize(value: str) -> str:
     value = re.sub(r"\s+", "", value).upper()
+    # Parentheses are presentation syntax in an answer key, not part of the
+    # actual answer. Support both `(4)` and `4`, while retaining negatives,
+    # decimals, fractions and slash-separated multi-answers.
+    if value.startswith("(") and value.endswith(")"):
+        value = value[1:-1]
     return value.replace("|", "/")
 
 
