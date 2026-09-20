@@ -20,15 +20,9 @@ def render_review(regions, subjects, answers):
             with cols[3]:
                 answer_default = answers.get(region.number, region.answer or "")
                 answer = st.text_input("Answer", value=answer_default, key=f"ans_{idx}")
-                normalized = answer.strip().upper()
-                if normalized:
-                    answers[region.number] = normalized
-                    region.answer = normalized
-                else:
-                    # An emptied review field is an explicit deletion, not a
-                    # request to keep the answer from the previous run.
-                    answers.pop(region.number, None)
-                    region.answer = None
+                if answer:
+                    answers[region.number] = answer.strip().upper()
+                    region.answer = answers[region.number]
             with cols[4]:
                 badge = "🔴 Review" if region.needs_review else "🟢 Good"
                 qtype = getattr(region, "question_type", "MCQ")

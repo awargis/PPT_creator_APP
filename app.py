@@ -38,7 +38,7 @@ pdf = st.file_uploader("### 1 · Question paper PDF", type=["pdf"], key="pdf")
 template = st.file_uploader("### 2 · Discussion PPT template", type=["pptx"], key="template")
 answer_text = st.text_area(
     "### 3 · Answer key (optional)",
-    placeholder="1: A\n2: B\n3: C\n4: D",
+    placeholder="Any order/format accepted — e.g. 1:(4), 3:(2), 2:(4) or 1:A\n2:B\n3:C",
     height=120,
 )
 
@@ -99,8 +99,10 @@ if "regions" in st.session_state:
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
 
-    # Keep the answer key live after analysis. The textarea is authoritative:
-    # replacing it or clearing it must replace/clear the old mapping as well.
+    # Keep the answer key live after analysis. Parse the CURRENT answer-key
+    # textarea on every Streamlit rerun, and synchronize every region from it.
+    # This matters when the user corrects/replaces the key after analysis.
+    # Clearing an answer must also clear the old value from the region.
     current_answer_text = answer_text or ""
     last_answer_text = st.session_state.get("answer_text_last", "")
     if current_answer_text != last_answer_text:
@@ -108,9 +110,8 @@ if "regions" in st.session_state:
         st.session_state["answers"] = answers
         st.session_state["answer_text_last"] = current_answer_text
     else:
-        # Do not fall back to the previous mapping when the current widget is
-        # empty; otherwise stale answers are written into newly generated PPTs.
-        answers = parse(current_answer_text) if current_answer_text.strip() else {}
+        # Keep the widget text authoritative even after another UI interaction.
+        answers = parse(current_answer_text) if current_answer_text.strip() else st.session_state.get("answers", {})
         st.session_state["answers"] = answers
 
     for region in regions:
@@ -136,7 +137,6 @@ if "regions" in st.session_state:
                     "⬇️ Download complete project output",
                     archive.getvalue(),
                     filename,
-                    "application/zip",
                     "application/zip",
                     type="primary",
                     use_container_width=True,
