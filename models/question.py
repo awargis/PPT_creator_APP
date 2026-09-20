@@ -23,6 +23,7 @@ class QuestionRegion:
     extraction_method: str = "native"
     end_page_index: Optional[int] = None
     included: bool = True
+    question_type: str = "MCQ"
 
     @property
     def sort_key(self) -> tuple[int, int, int]:

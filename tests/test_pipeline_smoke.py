@@ -29,7 +29,7 @@ def single_column_pdf() -> bytes:
 
 
 def test_pipeline_smoke_detects_questions_and_assigns_subjects():
-    regions, report = run_pipeline(
+    regions, report, structure = run_pipeline(
         synthetic_pdf(), "JEE Main", get_subjects("JEE Main"),
         dpi=120, pad_x=8, pad_y=6, use_ocr=False,
     )
@@ -41,7 +41,7 @@ def test_pipeline_smoke_detects_questions_and_assigns_subjects():
 
 
 def test_single_column_questions_use_full_page_width():
-    regions, _ = run_pipeline(
+    regions, _, _ = run_pipeline(
         single_column_pdf(), "JEE Main", get_subjects("JEE Main"),
         dpi=120, pad_x=8, pad_y=6, use_ocr=False,
     )

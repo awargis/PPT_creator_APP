@@ -35,6 +35,7 @@ def create_subject_outputs(template_bytes: bytes, regions, answers: dict, style:
                 "answer": answers.get(region.number, region.answer),
                 "confidence": region.confidence,
                 "needs_review": region.needs_review,
+                "question_type": getattr(region, "question_type", "MCQ"),
                 "page_index": region.page_index,
                 "column_index": region.column_index,
                 "crop": crop_path,

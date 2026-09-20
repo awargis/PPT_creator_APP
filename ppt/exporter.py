@@ -7,11 +7,13 @@ def export_subject_ppts(template_bytes, regions, answers, style="Premium Light")
     """Build one PPTX per subject from the uploaded template."""
     result = {}
     active = [region for region in regions if getattr(region, "included", True) and region.image is not None]
-    subjects = sorted({region.subject for region in active})
+    preferred_order = ["Physics", "Chemistry", "Mathematics", "Botany", "Zoology", "Biology", "Unclassified"]
+    present = {region.subject for region in active}
+    subjects = [s for s in preferred_order if s in present] + sorted(present - set(preferred_order))
     for subject in subjects:
         selected = sorted(
             [region for region in active if region.subject == subject],
-            key=lambda region: (region.number, region.page_index, region.box.y0),
+            key=lambda region: region.number,
         )
         if not selected:
             continue

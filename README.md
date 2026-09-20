@@ -7,7 +7,11 @@ A production-oriented, local-first Streamlit application for turning JEE Main, J
 ## What the application does
 
 ```text
-Question PDF
+Question PDF + discussion PPT
+    ↓
+Automatic exam detection (JEE Main / JEE Advanced / NEET)
+    ↓
+Paper instructions + section structure extraction
     ↓
 PyMuPDF native extraction
     ↓
@@ -15,19 +19,19 @@ Tesseract OCR fallback (only when native text is insufficient)
     ↓
 Page layout / column analysis
     ↓
-Exam-profile detection + question-start detection
+Question-marker detection (NOT option-marker detection)
     ↓
-Exam-aware question segmentation + MCQ option grouping
+Exact question segmentation (MCQ + all options / Integer type)
     ↓
-Transparent background crop + legibility enhancement
+Subject-wise validation and 25-question boundary checks
     ↓
-Deterministic subject classification
+Content crop + background/watermark removal + clarity enhancement
     ↓
-Confidence + review screen
+Human review
     ↓
 Uploaded PPT template cloning
     ↓
-Subject-wise PPTX + question crops + manifest ZIP
+Physics / Chemistry / Mathematics PPTX + crops + manifest ZIP
 ```
 
 ## Quick start
@@ -94,22 +98,19 @@ QUESTION_IMAGE
 
 The application replaces that shape with the detected question crop. If it is absent, a safe centered image area is used.
 
+The question crop is the original PDF raster, not AI-generated/retyped text. MCQ
+options remain part of the same question crop. Integer/Numerical questions are
+kept in their original paper format. The default image treatment removes the
+white/light-grey page background (including light institutional watermark
+artifacts) while preserving dark mathematical text and diagrams.
+
 More detail: `docs/TEMPLATE_GUIDE.md`.
 
-## Exam and subject classification
+## Subject classification
 
-The sidebar supports **Auto-detect** as well as manual override.
-
-- **JEE Main:** modern subject sections that restart numbering at 1 are handled as
-  25-question blocks: Physics → Chemistry → Mathematics. The detector does not
-  treat `(1) (2) (3) (4)` MCQ options as new questions.
-- **NEET UG:** repeated 1–45 subject blocks are handled as Physics → Chemistry →
-  Botany → Zoology.
-- **JEE Advanced:** no unsafe fixed subject-number mapping is assumed. The system
-  uses explicit subject/section headers and sequential question starts, with
-  unresolved items marked `Unclassified` for review.
-- The first pages are also used for local, explainable exam-type detection
-  (JEE Main / JEE Advanced / NEET UG).
+- **JEE Main:** Q1–25 Physics, Q26–50 Chemistry, Q51–75 Mathematics. The paper itself is first checked for section headers/instructions, then these ranges are used as a structural validation guard.
+- **NEET UG:** Q1–45 Physics, Q46–90 Chemistry, Q91–135 Botany, Q136–180 Zoology.
+- **JEE Advanced:** no artificial question-number mapping is used. The system relies on detected subject/section headers; unresolved questions are marked `Unclassified` and sent to review.
 
 This keeps JEE Advanced classification explainable rather than guessing.
 
@@ -155,12 +156,4 @@ python -m pip install flake8 pytest
 
 ## Current engineering scope
 
-The project is deliberately deterministic and reviewable. Question boundaries are
-based on detected question starts, not option labels, so a complete MCQ (question
-+ all options) becomes one crop. Questions that continue onto another PDF page
-are stitched into one crop. Near-white paper is converted to transparency so
-the source question sits cleanly on a premium PPT background.
-
-Unusual multi-page layouts, heavily graphical scans, OCR errors, or non-standard
-JEE Advanced section numbering can still require human review. The UI therefore
-exposes confidence and manual correction before PPT export.
+The project is deliberately deterministic and reviewable. It does not pretend that arbitrary JEE PDFs can always be segmented perfectly: unusual multi-page layouts, heavily graphical questions and malformed scans can still require human review. The UI therefore exposes confidence and manual correction before PPT export.

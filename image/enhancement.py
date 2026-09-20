@@ -1,58 +1,53 @@
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+"""Premium question-image cleanup.
+
+The source question is never re-rendered as typed text. The original PDF raster
+is retained, then cleaned: whitespace is trimmed, near-white paper is made
+transparent, and contrast/sharpness are gently improved.
+"""
+
 import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 
-def _remove_paper_background(image: Image.Image) -> Image.Image:
-    """Make near-white paper transparent while preserving text/diagrams.
+def remove_white_background(image: Image.Image, white_threshold: int = 248) -> Image.Image:
+    rgb = np.array(image.convert("RGB"))
+    maxc = rgb.max(axis=2)
+    minc = rgb.min(axis=2)
+    # Only remove neutral near-white paper. Bright colored diagrams remain.
+    neutral = (maxc - minc) <= 8
+    white = neutral & (minc >= white_threshold)
 
-    This is intentionally conservative: only low-saturation, very bright
-    pixels are removed. Colored diagrams and light mathematical marks remain.
-    """
-    rgb = image.convert("RGB")
-    arr = np.asarray(rgb).astype(np.uint8)
-    mx = arr.max(axis=2)
-    mn = arr.min(axis=2)
-    spread = mx.astype(np.int16) - mn.astype(np.int16)
-    luminance = (
-        0.299 * arr[:, :, 0]
-        + 0.587 * arr[:, :, 1]
-        + 0.114 * arr[:, :, 2]
-    )
+    alpha = np.full(rgb.shape[:2], 255, dtype=np.uint8)
+    grey = rgb.mean(axis=2)
+    # Keep dark mathematical text/lines opaque. Fade only light neutral paper
+    # and watermark pixels; this removes the PW-style background without
+    # destroying diagrams.
+    fade = neutral & (grey >= 95)
+    alpha[fade] = np.clip((125 - grey[fade]) * 8.0, 0, 255).astype(np.uint8)
+    alpha[white] = 0
 
-    # Fully remove white paper; feather the boundary so anti-aliased text
-    # remains visually clean instead of getting jagged.
-    alpha = np.where(
-        (luminance >= 248) & (spread <= 10),
-        0,
-        np.where(
-            (luminance >= 232) & (spread <= 16),
-            ((248 - luminance) / 16 * 255).clip(20, 255),
-            255,
-        ),
-    ).astype(np.uint8)
-
-    rgba = np.dstack([arr, alpha])
-    result = Image.fromarray(rgba, "RGBA")
-
-    # Remove transparent outer margins. This makes the question occupy the
-    # PPT placeholder instead of carrying a large invisible page rectangle.
-    bbox = result.getbbox()
-    if bbox:
-        result = result.crop(bbox)
-    return result
+    return Image.fromarray(np.dstack([rgb, alpha]), "RGBA")
 
 
-def enhance(image: Image.Image, style="Premium Light") -> Image.Image:
-    """Improve legibility and remove paper background without altering content."""
+def enhance(
+    image: Image.Image,
+    style: str = "Premium Light",
+    transparent_background: bool = True,
+) -> Image.Image:
+    """Create a crisp presentation-ready question crop."""
     result = ImageOps.exif_transpose(image).convert("RGB")
-    result = ImageOps.autocontrast(result, cutoff=0.5)
-    result = ImageEnhance.Contrast(result).enhance(1.10)
-    result = ImageEnhance.Sharpness(result).enhance(1.22)
+    result = ImageOps.autocontrast(result, cutoff=0.35)
+    result = ImageEnhance.Contrast(result).enhance(1.08)
+    result = ImageEnhance.Sharpness(result).enhance(1.20)
 
     if style == "High Contrast":
-        result = ImageEnhance.Contrast(result).enhance(1.16)
-        result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=120, threshold=3))
+        result = ImageEnhance.Contrast(result).enhance(1.18)
+        result = result.filter(
+            ImageFilter.UnsharpMask(radius=1.0, percent=125, threshold=3)
+        )
     elif style == "Premium Dark":
-        result = ImageEnhance.Brightness(result).enhance(0.98)
+        result = ImageEnhance.Contrast(result).enhance(1.04)
 
-    return _remove_paper_background(result)
+    if transparent_background:
+        return remove_white_background(result)
+    return result

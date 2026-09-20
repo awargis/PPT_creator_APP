@@ -4,7 +4,7 @@ import streamlit as st
 def render_review(regions, subjects, answers):
     """Interactive review editor. Changes persist in Streamlit session state."""
     st.subheader("Review & correct")
-    st.caption("Edit question number, subject, answer, or exclude a bad detection before exporting.")
+    st.caption("Each card is one complete question. MCQ options stay inside the same crop; Integer/Numerical questions remain in their original format.")
 
     for idx, region in enumerate(regions):
         with st.container(border=True):
@@ -25,5 +25,9 @@ def render_review(regions, subjects, answers):
                     region.answer = answers[region.number]
             with cols[4]:
                 badge = "🔴 Review" if region.needs_review else "🟢 Good"
-                st.markdown(f"**{badge}** · confidence {region.confidence:.0%} · page {region.page_index + 1}")
+                qtype = getattr(region, "question_type", "MCQ")
+                st.markdown(
+                    f"**{badge}** · **{qtype}** · confidence {region.confidence:.0%} · "
+                    f"source page {region.page_index + 1}"
+                )
                 st.image(region.image, use_container_width=True)
