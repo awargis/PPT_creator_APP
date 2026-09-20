@@ -99,10 +99,8 @@ if "regions" in st.session_state:
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
 
-    # Keep the answer key live after analysis. Parse the CURRENT answer-key
-    # textarea on every Streamlit rerun, and synchronize every region from it.
-    # This matters when the user corrects/replaces the key after analysis.
-    # Clearing an answer must also clear the old value from the region.
+    # Keep the answer key live after analysis. The textarea is authoritative:
+    # replacing it or clearing it must replace/clear the old mapping as well.
     current_answer_text = answer_text or ""
     last_answer_text = st.session_state.get("answer_text_last", "")
     if current_answer_text != last_answer_text:
@@ -110,8 +108,9 @@ if "regions" in st.session_state:
         st.session_state["answers"] = answers
         st.session_state["answer_text_last"] = current_answer_text
     else:
-        # Keep the widget text authoritative even after another UI interaction.
-        answers = parse(current_answer_text) if current_answer_text.strip() else st.session_state.get("answers", {})
+        # Do not fall back to the previous mapping when the current widget is
+        # empty; otherwise stale answers are written into newly generated PPTs.
+        answers = parse(current_answer_text) if current_answer_text.strip() else {}
         st.session_state["answers"] = answers
 
     for region in regions:
@@ -137,6 +136,7 @@ if "regions" in st.session_state:
                     "⬇️ Download complete project output",
                     archive.getvalue(),
                     filename,
+                    "application/zip",
                     "application/zip",
                     type="primary",
                     use_container_width=True,
