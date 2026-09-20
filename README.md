@@ -157,3 +157,9 @@ python -m pip install flake8 pytest
 ## Current engineering scope
 
 The project is deliberately deterministic and reviewable. It does not pretend that arbitrary JEE PDFs can always be segmented perfectly: unusual multi-page layouts, heavily graphical questions and malformed scans can still require human review. The UI therefore exposes confidence and manual correction before PPT export.
+
+### Premium dark-slide text and answer mapping
+- Transparent question crops automatically recolor dark neutral source text/lines to a bright white foreground so the original PDF text remains readable on the graphite discussion template.
+- Colored diagrams are preserved.
+- Answer keys support MCQ letters/options and numerical/integer answers.
+- Answers are mapped strictly by question number and injected onto the same question slide. If a custom template has no `#ANSWER` token, the exporter adds a premium answer badge automatically.

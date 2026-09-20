@@ -57,6 +57,7 @@ if analyze:
 
     answers = parse(answer_text)
     st.session_state["answers"] = answers
+    st.session_state["answer_text_last"] = answer_text or ""
     with st.status("Processing document…", expanded=True) as status:
         st.write("Rendering PDF pages…")
         try:
@@ -97,6 +98,19 @@ if "regions" in st.session_state:
     regions = st.session_state["regions"]
     answers = st.session_state.setdefault("answers", {})
     report = st.session_state["report"]
+
+    # Keep the answer key live after analysis. Previously the pasted key was
+    # parsed only when the Analyze button was clicked, so editing the answer
+    # key afterwards could leave the PPT exporter using stale answers.
+    current_answer_text = answer_text or ""
+    last_answer_text = st.session_state.get("answer_text_last", "")
+    if current_answer_text != last_answer_text:
+        answers = parse(current_answer_text) if current_answer_text.strip() else {}
+        st.session_state["answers"] = answers
+        st.session_state["answer_text_last"] = current_answer_text
+        for region in regions:
+            if region.number in answers:
+                region.answer = answers[region.number]
 
     render_report(report)
     render_review(regions, [s.subject for s in st.session_state["structure"].sections if s.subject != "Unclassified"], answers)

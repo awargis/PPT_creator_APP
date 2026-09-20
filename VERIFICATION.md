@@ -6,7 +6,7 @@ Executed against the final repository build.
 
 ```text
 python -m compileall .  -> PASS
-pytest -q              -> 15 passed in 1.16s
+PYTHONPATH=. pytest -q  -> 17 passed in 1.02s
 ```
 
 ## Supplied PW sample-paper verification
@@ -32,8 +32,10 @@ Representative MCQ crops were checked to ensure the question and its options
 remain in one raster crop. Representative Integer-type crops retain their
 original paper format.
 
-The cleanup layer produces RGBA crops and removes the light institutional
-page/watermark background when the default transparent-background mode is used.
+The cleanup layer produces RGBA crops, removes the light institutional
+page/watermark background, and recolors dark neutral source text/lines to white
+for readability on the graphite presentation background. Colored source artwork
+is retained.
 
 ## Real production PPT smoke test
 
@@ -50,7 +52,10 @@ ZIP integrity: PASS
 ```
 
 All three generated PPTX files were reopened with `python-pptx` and their slide
-counts verified.
+counts verified. Answer mapping was additionally smoke-tested by question number,
+including numerical/integer answers. A generated slide was rendered through
+LibreOffice to verify the dark template background, readable white question text,
+and orange answer footer.
 
 ## Not executed in this environment
 

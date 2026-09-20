@@ -34,3 +34,22 @@ def test_template_based_ppt_generation_creates_nonempty_ppt():
     assert any(shape.shape_type == 13 for shape in prs.slides[0].shapes)
     text = " ".join(shape.text for shape in prs.slides[0].shapes if shape.has_text_frame)
     assert "Q1" in text and "Mathematics" in text and "A" in text
+
+
+def test_answer_is_mapped_by_question_number_and_visible_on_same_slide():
+    image = Image.new("RGBA", (800, 500), (0, 0, 0, 0))
+    r1 = QuestionRegion(
+        number=1, page_index=0, column_index=0,
+        box=BoundingBox(0, 0, 800, 500), image=image, subject="Physics",
+    )
+    r2 = QuestionRegion(
+        number=21, page_index=0, column_index=0,
+        box=BoundingBox(0, 0, 800, 500), image=image, subject="Physics",
+    )
+    outputs = export_subject_ppts(make_template(), [r2, r1], {1: "A", 21: "17"})
+    prs = Presentation(io.BytesIO(outputs["Physics"]))
+    assert len(prs.slides) == 2
+    texts = [" ".join(sh.text for sh in slide.shapes if sh.has_text_frame) for slide in prs.slides]
+    # Slides are sorted by question number, and each answer belongs to its own Q.
+    assert "Q1" in texts[0] and "A" in texts[0]
+    assert "Q21" in texts[1] and "17" in texts[1]
